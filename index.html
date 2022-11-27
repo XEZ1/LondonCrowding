@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+
+    <title>Document</title>
+
+    <style>
+        table, td, th {
+          border: 1px solid;
+        }
+        
+        table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+    </style>
+</head>
+<body>
+    <h1>View crowding info at tube stations</h1>
+    <div>
+        <label for="station">Station: </label>
+        <select name="station" id="station">
+            <option value="940GZZLUPAC">Paddington</option>
+            <option value="940GZZLUKSX">King’s Cross St Pancras</option>
+            <option value="940GZZLUEUS">Euston</option>
+            <option value="940GZZLUWLO">Waterloo</option>
+            <option value="940GZZLULNB">London Bridge</option>
+            <option value="940GZZLULVT">Liverpool Street</option>
+        </select>
+
+        <label for="dayOfWeek">Day of the week: </label>
+        <select name="dayOfWeek" id="dayOfWeek">
+            <option value="mon">Monday</option>
+            <option value="tue">Tuesday</option>
+            <option value="wed">Wednesday</option>
+            <option value="thu">Thursday</option>
+            <option value="fri">Friday</option>
+            <option value="sat">Saturday</option>
+            <option value="sun">Sunday</option>
+        </select>
+
+        <button id="btn-view-info" type="button">View crowding info!</button>
+    </div>
+
+    <div>
+        <canvas id="myChart" width="400" height="300"></canvas>
+    </div>
+
+    <div style="margin-bottom: 10px;">
+        <div>
+            AM peak time frame:
+            <span id="am-peak"></span>
+        </div>
+        <div>
+            PM peak time frame:
+            <span id="pm-peak"></span>
+        </div>
+    </div>
+
+    <div>
+        <table id="data-table">
+            <thead>
+                <th>Time Band</th>
+                <th>Crowding Percentage</th>
+            </thead>
+            <tbody id="data-table-body">
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        const API_KEY = "cbaa3964c6a74a0bb1bed04dba0dbb1f";
+        var timeBands = [];
+        var percentages = [];
+        var chart;
+        // block double button click 
+        var pendingResponse = false;
+
+        $(document).ready(e => {
+            $("#btn-view-info").click(e => {
+                if (pendingResponse) {
+                    return;
+                }
+
+                clearTable();
+                chart?.destroy();
+
+                let stationId = $("#station").val();
+                let dayOfWeek = $("#dayOfWeek").val();
+
+                getData(stationId, dayOfWeek);
+            })
+        })
+
+        /**
+         * Get data from the API of tfl.
+         *
+         * @param {string} stationId - station's NaPTAN ID
+         * @param {string} dayOfWeek - shortened name day of the week
+         */
+        function getData(stationId, dayOfWeek) {
+            var data;
+
+            $.ajax({
+                url: `https://api.tfl.gov.uk/crowding/${stationId}/${dayOfWeek}`,
+                method: "GET",
+                headers: {
+                    "app_key": API_KEY
+                }
+            })
+            .done(response => {
+                // array of timebands
+                const timebands = response['timeBands']; 
+
+                // get array of timeBands
+                timeBands = timebands.map(item => item['timeBand']);
+
+                // get arrata of percentageOfBaseLines
+                percentages = timebands.map(item => item['percentageOfBaseLine'] * 100);
+
+                chart = createTimeBandChart('#myChart');
+
+                // view amPeakTimeBand and pmPeakTimeBand data
+                $("#am-peak").text(response['amPeakTimeBand']);
+                $("#pm-peak").text(response['pmPeakTimeBand']);
+
+                fillTable("#data-table-body", timebands);
+
+                pendingResponse = false;
+            })
+            .fail(f => {
+                console.error(f);
+                pendingResponse = false;
+            });
+
+            pendingResponse = true;
+        }
+
+
+        /**
+         * Clear the table.
+         *
+         * @param {string} tbodyId - id of tbody html-element. (add '#' at start of id)
+         */
+        function clearTable(tbodyId) {
+            let tbody = $(tbodyId);
+            tbody.html("");
+        }
+
+
+        /**
+         * Fill the table with time bands data.
+         *
+         * @param {string} tbodyId - id of tbody html-element. (add '#' at start of id)
+         * @param {Array}  timebands - array of values to be extracted.
+         */
+        function fillTable(tbodyId, timebands) {
+            let tbody = $(tbodyId);
+
+            for (let r in timebands) {
+                tbody.append(
+                    $("<tr>")
+                        .append(
+                            $("<td>").text(timebands[r]['timeBand'])
+                        )
+                        .append(
+                            $("<td>").text(timebands[r]['percentageOfBaseLine'])
+                        )
+                );
+            }
+        }
+
+        /**
+         * Create time band chart.
+         *
+         * @param {string} canvasId - id of canvas html-element. (add '#' at start of id)
+         */
+        function createTimeBandChart(canvasId) {
+            // ctx - context
+            const ctx = $(canvasId);
+
+            return new Chart(ctx, {
+                type: "bar",
+                data: {
+                    labels: timeBands,
+                    datasets: [{
+                        label: "Time Bands",
+                        data: percentages,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            min: 0,
+                            max: 100,
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
